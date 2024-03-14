@@ -51,8 +51,8 @@ LOOKER_DTYPE_MAP = {
         'TIME': 'string',        # can we support time?
         'TIMESTAMP': 'timestamp',
         'TIMESTAMP_NTZ': 'timestamp',
-        # TIMESTAMP_LTZ not supported (see https://docs.looker.com/reference/field-params/dimension_group)
-        # TIMESTAMP_TZ not supported (see https://docs.looker.com/reference/field-params/dimension_group)
+        'TIMESTAMP_LTZ': 'timestamp', # not supported (see https://docs.looker.com/reference/field-params/dimension_group) but we can cast
+        'TIMESTAMP_TZ': 'timestamp', # not supported (see https://docs.looker.com/reference/field-params/dimension_group) but we can cast
         'VARIANT': 'string',
         'OBJECT': 'string',
         'ARRAY': 'string',
@@ -206,12 +206,18 @@ def map_adapter_type_to_looker(adapter_type: models.SupportedDbtAdapters, column
 
 
 def lookml_date_time_dimension_group(column: models.DbtModelColumn, adapter_type: models.SupportedDbtAdapters):
+    datatype = map_adapter_type_to_looker(adapter_type, column.data_type)
+    if adapter_type == models.SupportedDbtAdapters.snowflake.value and column.data_type in ("TIMESTAMP_LTZ", "TIMESTAMP_TZ"):
+        logging.debug(f"Snowflake TIMESTAMP_LTZ and TIMESTAMP_TZ are not supported by Looker. Casting to TIMESTAMP_NTZ")
+        default_sql = f'CAST(${{TABLE}}.{column.name}) AS TIMESTAMP_NTZ)'
+    else:
+        default_sql = f'${{TABLE}}.{column.name}'
     return {
         'name': column.meta.dimension.name or column.name,
         'type': 'time',
-        'sql': column.meta.dimension.sql or f'${{TABLE}}.{column.name}',
+        'sql': column.meta.dimension.sql or default_sql,
         'description': column.meta.dimension.description or column.description,
-        'datatype': map_adapter_type_to_looker(adapter_type, column.data_type),
+        'datatype': datatype,
         'timeframes': ['raw', 'time', 'hour', 'date', 'week', 'month', 'quarter', 'year']
     }
 

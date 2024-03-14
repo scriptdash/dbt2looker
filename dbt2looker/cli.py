@@ -141,3 +141,6 @@ def run():
     
     logging.info(f'Generated {len(lookml_models)} lookml models in {args.output_dir}')
     logging.info('Success')
+
+if __name__ == '__main__':
+    run()
