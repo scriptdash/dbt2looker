@@ -83,6 +83,16 @@ def run():
         type=str,
     )
     argparser.add_argument(
+        "--explore-tag",
+        help="Filter to dbt models using this tag for generating explores",
+        type=str,
+    )
+    argparser.add_argument(
+        '--use-file-path',
+        action='store_true',
+        help='Use model file path for the generated LookML',
+    )
+    argparser.add_argument(
         '--log-level',
         help='Set level of logs. Default is INFO',
         choices=['DEBUG', 'INFO', 'WARN', 'ERROR'],
@@ -119,12 +129,13 @@ def run():
 
     # Generate lookml views
     lookml_views = [
-        generator.lookml_view_from_dbt_model(model, adapter_type)
+        generator.lookml_view_from_dbt_model(model, adapter_type, args.use_file_path)
         for model in typed_dbt_models
     ]
-    pathlib.Path(os.path.join(args.output_dir, 'views')).mkdir(parents=True, exist_ok=True)
     for view in lookml_views:
-        with open(os.path.join(args.output_dir, 'views', view.filename), 'w') as f:
+        path = os.path.join(args.output_dir, 'views', view.directory, view.filename)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w') as f:
             f.write(view.contents)
 
     logging.info(f'Generated {len(lookml_views)} lookml views in {os.path.join(args.output_dir, "views")}')
@@ -132,11 +143,14 @@ def run():
     # Generate Lookml models
     connection_name = args.model_connection or dbt_project_config.name
     lookml_models = [
-        generator.lookml_model_from_dbt_model(model, connection_name)
+        generator.lookml_model_from_dbt_model(model, connection_name, args.use_file_path)
         for model in typed_dbt_models
+        if args.explore_tag in model.tags
     ]
     for model in lookml_models:
-        with open(os.path.join(args.output_dir, model.filename), 'w') as f:
+        path = os.path.join(args.output_dir, model.directory, model.filename)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w') as f:
             f.write(model.contents)
     
     logging.info(f'Generated {len(lookml_models)} lookml models in {args.output_dir}')

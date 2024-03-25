@@ -1,4 +1,5 @@
 from enum import Enum
+from pathlib import Path
 from typing import Any, Union, Dict, List, Optional
 try:
     from typing import Literal
@@ -88,6 +89,7 @@ class Dbt2LookerMeasure(BaseModel):
     group_label: Optional[str]
     label: Optional[str]
     hidden: Optional[LookerHiddenType]
+    drill_fields: Optional[List[str]]
 
     @validator('filters')
     def filters_are_singular_dicts(cls, v: List[Dict[str, str]]):
@@ -118,11 +120,13 @@ class Dbt2LookerMeta(BaseModel):
 # Looker file types
 class LookViewFile(BaseModel):
     filename: str
+    directory: str
     contents: str
 
 
 class LookModelFile(BaseModel):
     filename: str
+    directory: str
     contents: str
 
 
@@ -164,7 +168,7 @@ class Dbt2LookerExploreJoin(BaseModel):
     type: Optional[LookerJoinType] = LookerJoinType.left_outer
     relationship: Optional[LookerJoinRelationship] = LookerJoinRelationship.many_to_one
     sql_on: str
-
+    view_label: Optional[str]
 
 class Dbt2LookerModelMeta(BaseModel):
     joins: Optional[List[Dbt2LookerExploreJoin]] = []
@@ -183,6 +187,7 @@ class DbtModel(DbtNode):
     columns: Dict[str, DbtModelColumn]
     tags: List[str]
     meta: DbtModelMeta
+    path: Path
 
     @validator('columns')
     def case_insensitive_column_names(cls, v: Dict[str, DbtModelColumn]):

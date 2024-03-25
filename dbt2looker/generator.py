@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 
 import lkml
@@ -320,10 +321,12 @@ def lookml_measure(measure_name: str, column: models.DbtModelColumn, measure: mo
         m['label'] = measure.label
     if measure.hidden:
         m['hidden'] = measure.hidden.value
+    if measure.drill_fields:
+        m['drill_fields'] = measure.drill_fields
     return m
 
 
-def lookml_view_from_dbt_model(model: models.DbtModel, adapter_type: models.SupportedDbtAdapters):
+def lookml_view_from_dbt_model(model: models.DbtModel, adapter_type: models.SupportedDbtAdapters, use_file_path: bool):
     lookml = {
         'view': {
             'name': model.name,
@@ -341,10 +344,12 @@ def lookml_view_from_dbt_model(model: models.DbtModel, adapter_type: models.Supp
     )
     contents = lkml.dump(lookml)
     filename = f'{model.name}.view.lkml'
-    return models.LookViewFile(filename=filename, contents=contents)
+    return models.LookViewFile(filename=filename,
+                               directory=os.path.dirname(model.path) if use_file_path else '',
+                               contents=contents)
 
 
-def lookml_model_from_dbt_model(model: models.DbtModel, connection_name: str):
+def lookml_model_from_dbt_model(model: models.DbtModel, connection_name: str, use_file_path: bool):
     # Note: assumes view names = model names
     #       and models are unique across dbt packages in project
     lookml = {
@@ -359,6 +364,7 @@ def lookml_model_from_dbt_model(model: models.DbtModel, connection_name: str):
                     'type': join.type.value,
                     'relationship': join.relationship.value,
                     'sql_on': join.sql_on,
+                    'view_label': join.view_label or join.join,
                 }
                 for join in model.meta.joins
             ]
@@ -366,4 +372,8 @@ def lookml_model_from_dbt_model(model: models.DbtModel, connection_name: str):
     }
     contents = lkml.dump(lookml)
     filename = f'{model.name}.model.lkml'
-    return models.LookModelFile(filename=filename, contents=contents)
+    return models.LookModelFile(
+        filename=filename,
+        directory=os.path.dirname(model.path) if use_file_path else '',
+        contents=contents,
+    )
