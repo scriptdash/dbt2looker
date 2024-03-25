@@ -268,6 +268,8 @@ def lookml_dimensions_from_model(model: models.DbtModel, adapter_type: models.Su
             lookml_dict['value_format_name'] =  column.meta.dimension.value_format_name.value
         if column.constraints and "primary_key" in [constraint.type for constraint in column.constraints]:
             lookml_dict['primary_key'] = "yes"
+        if column.meta.dimension.hidden:
+            lookml_dict['hidden'] = 'yes'
         dimensions.append(lookml_dict)
 
     return dimensions

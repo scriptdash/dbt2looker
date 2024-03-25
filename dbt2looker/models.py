@@ -104,6 +104,7 @@ class Dbt2LookerDimension(BaseModel):
     sql: Optional[str]
     description: Optional[str]
     value_format_name: Optional[LookerValueFormatName]
+    hidden: bool = False
 
 
 class Dbt2LookerMeta(BaseModel):
