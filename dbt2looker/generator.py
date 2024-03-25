@@ -249,23 +249,28 @@ def lookml_dimension_groups_from_model(model: models.DbtModel, adapter_type: mod
 
 
 def lookml_dimensions_from_model(model: models.DbtModel, adapter_type: models.SupportedDbtAdapters):
-    return [
-        {
+    dimensions = []
+    for column in model.columns.values():
+        if not column.meta.dimension.enabled:
+            logging.debug(f'Dimension {column.name} is disabled in model {model.name}')
+            continue
+        if map_adapter_type_to_looker(adapter_type, column.data_type) not in looker_scalar_types:
+            logging.debug(f'Column {column.name} is not a scalar type, no dimension will be created.')
+            continue
+        lookml_dict = {
             'name': column.meta.dimension.name or column.name,
             'type': map_adapter_type_to_looker(adapter_type, column.data_type),
             'sql': column.meta.dimension.sql or f'${{TABLE}}.{column.name}',
             'description': column.meta.dimension.description or column.description,
-            **(
-                {'value_format_name': column.meta.dimension.value_format_name.value}
-                if (column.meta.dimension.value_format_name
-                    and map_adapter_type_to_looker(adapter_type, column.data_type) == 'number')
-                else {}
-            )
         }
-        for column in model.columns.values()
-        if column.meta.dimension.enabled
-        and map_adapter_type_to_looker(adapter_type, column.data_type) in looker_scalar_types
-    ]
+        if (column.meta.dimension.value_format_name
+                and map_adapter_type_to_looker(adapter_type, column.data_type) == 'number'):
+            lookml_dict['value_format_name'] =  column.meta.dimension.value_format_name.value
+        if column.constraints and "primary_key" in [constraint.type for constraint in column.constraints]:
+            lookml_dict['primary_key'] = "yes"
+        dimensions.append(lookml_dict)
+
+    return dimensions
 
 
 def lookml_measure_filters(measure: models.Dbt2LookerMeasure, model: models.DbtModel):

@@ -129,15 +129,26 @@ class LookModelFile(BaseModel):
 class DbtProjectConfig(BaseModel):
     name: str
 
+class ConstraintType(str, Enum):
+    not_null = 'not_null'
+    primary_key = 'primary_key'
+    foreign_key = 'foreign_key'
+    unique = 'unique'
+    check = 'check'
+
+class DbtColumnConstraint(BaseModel):
+    type: ConstraintType
+    name: Optional[str]
+    expression: Optional[str]
 
 class DbtModelColumnMeta(Dbt2LookerMeta):
     pass
-
 
 class DbtModelColumn(BaseModel):
     name: str
     description: str
     data_type: Optional[str]
+    constraints: Optional[List[DbtColumnConstraint]]
     meta: DbtModelColumnMeta
 
 
