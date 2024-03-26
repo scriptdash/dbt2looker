@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 
 import lkml
@@ -249,23 +250,30 @@ def lookml_dimension_groups_from_model(model: models.DbtModel, adapter_type: mod
 
 
 def lookml_dimensions_from_model(model: models.DbtModel, adapter_type: models.SupportedDbtAdapters):
-    return [
-        {
+    dimensions = []
+    for column in model.columns.values():
+        if not column.meta.dimension.enabled:
+            logging.debug(f'Dimension {column.name} is disabled in model {model.name}')
+            continue
+        if map_adapter_type_to_looker(adapter_type, column.data_type) not in looker_scalar_types:
+            logging.debug(f'Column {column.name} is not a scalar type, no dimension will be created.')
+            continue
+        lookml_dict = {
             'name': column.meta.dimension.name or column.name,
             'type': map_adapter_type_to_looker(adapter_type, column.data_type),
             'sql': column.meta.dimension.sql or f'${{TABLE}}.{column.name}',
             'description': column.meta.dimension.description or column.description,
-            **(
-                {'value_format_name': column.meta.dimension.value_format_name.value}
-                if (column.meta.dimension.value_format_name
-                    and map_adapter_type_to_looker(adapter_type, column.data_type) == 'number')
-                else {}
-            )
         }
-        for column in model.columns.values()
-        if column.meta.dimension.enabled
-        and map_adapter_type_to_looker(adapter_type, column.data_type) in looker_scalar_types
-    ]
+        if (column.meta.dimension.value_format_name
+                and map_adapter_type_to_looker(adapter_type, column.data_type) == 'number'):
+            lookml_dict['value_format_name'] =  column.meta.dimension.value_format_name.value
+        if column.constraints and "primary_key" in [constraint.type for constraint in column.constraints]:
+            lookml_dict['primary_key'] = "yes"
+        if column.meta.dimension.hidden:
+            lookml_dict['hidden'] = 'yes'
+        dimensions.append(lookml_dict)
+
+    return dimensions
 
 
 def lookml_measure_filters(measure: models.Dbt2LookerMeasure, model: models.DbtModel):
@@ -313,10 +321,12 @@ def lookml_measure(measure_name: str, column: models.DbtModelColumn, measure: mo
         m['label'] = measure.label
     if measure.hidden:
         m['hidden'] = measure.hidden.value
+    if measure.drill_fields:
+        m['drill_fields'] = measure.drill_fields
     return m
 
 
-def lookml_view_from_dbt_model(model: models.DbtModel, adapter_type: models.SupportedDbtAdapters):
+def lookml_view_from_dbt_model(model: models.DbtModel, adapter_type: models.SupportedDbtAdapters, use_file_path: bool):
     lookml = {
         'view': {
             'name': model.name,
@@ -334,10 +344,12 @@ def lookml_view_from_dbt_model(model: models.DbtModel, adapter_type: models.Supp
     )
     contents = lkml.dump(lookml)
     filename = f'{model.name}.view.lkml'
-    return models.LookViewFile(filename=filename, contents=contents)
+    return models.LookViewFile(filename=filename,
+                               directory=os.path.dirname(model.path) if use_file_path else '',
+                               contents=contents)
 
 
-def lookml_model_from_dbt_model(model: models.DbtModel, connection_name: str):
+def lookml_model_from_dbt_model(model: models.DbtModel, connection_name: str, use_file_path: bool):
     # Note: assumes view names = model names
     #       and models are unique across dbt packages in project
     lookml = {
@@ -352,6 +364,7 @@ def lookml_model_from_dbt_model(model: models.DbtModel, connection_name: str):
                     'type': join.type.value,
                     'relationship': join.relationship.value,
                     'sql_on': join.sql_on,
+                    'view_label': join.view_label or join.join,
                 }
                 for join in model.meta.joins
             ]
@@ -359,4 +372,8 @@ def lookml_model_from_dbt_model(model: models.DbtModel, connection_name: str):
     }
     contents = lkml.dump(lookml)
     filename = f'{model.name}.model.lkml'
-    return models.LookModelFile(filename=filename, contents=contents)
+    return models.LookModelFile(
+        filename=filename,
+        directory=os.path.dirname(model.path) if use_file_path else '',
+        contents=contents,
+    )
