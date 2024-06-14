@@ -210,7 +210,7 @@ def lookml_date_time_dimension_group(column: models.DbtModelColumn, adapter_type
     datatype = map_adapter_type_to_looker(adapter_type, column.data_type)
     if adapter_type == models.SupportedDbtAdapters.snowflake.value and column.data_type in ("TIMESTAMP_LTZ", "TIMESTAMP_TZ"):
         logging.debug(f"Snowflake TIMESTAMP_LTZ and TIMESTAMP_TZ are not supported by Looker. Casting to TIMESTAMP_NTZ")
-        default_sql = f'CAST(${{TABLE}}.{column.name}) AS TIMESTAMP_NTZ'
+        default_sql = f'${{TABLE}}.{column.name}::TIMESTAMP_NTZ'
     else:
         default_sql = f'${{TABLE}}.{column.name}'
     return {
