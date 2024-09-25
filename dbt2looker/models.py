@@ -1,17 +1,13 @@
 from enum import Enum
 from pathlib import Path
 from typing import Any, Union, Dict, List, Optional
+
+from pydantic_core import PydanticCustomError
 try:
     from typing import Literal
 except ImportError:
     from typing_extensions import Literal
-from pydantic import BaseModel, Field, PydanticValueError, validator
-
-
-# dbt2looker utility types
-class UnsupportedDbtAdapterError(PydanticValueError):
-    code = 'unsupported_dbt_adapter'
-    msg_template = '{wrong_value} is not a supported dbt adapter'
+from pydantic import BaseModel, Field, field_validator
 
 
 class SupportedDbtAdapters(str, Enum):
@@ -83,15 +79,15 @@ class LookerHiddenType(str, Enum):
 class Dbt2LookerMeasure(BaseModel):
     type: LookerMeasureType
     filters: Optional[List[Dict[str, str]]] = []
-    description: Optional[str]
-    sql: Optional[str]
-    value_format_name: Optional[LookerValueFormatName]
-    group_label: Optional[str]
-    label: Optional[str]
-    hidden: Optional[LookerHiddenType]
-    drill_fields: Optional[List[str]]
+    description: Optional[str] = None
+    sql: Optional[str] = None
+    value_format_name: Optional[LookerValueFormatName] = None
+    group_label: Optional[str] = None
+    label: Optional[str] = None
+    hidden: Optional[LookerHiddenType] = None
+    drill_fields: Optional[List[str]] = None
 
-    @validator('filters')
+    @field_validator('filters')
     def filters_are_singular_dicts(cls, v: List[Dict[str, str]]):
         if v is not None:
             for f in v:
@@ -102,10 +98,10 @@ class Dbt2LookerMeasure(BaseModel):
 
 class Dbt2LookerDimension(BaseModel):
     enabled: Optional[bool] = True
-    name: Optional[str]
-    sql: Optional[str]
-    description: Optional[str]
-    value_format_name: Optional[LookerValueFormatName]
+    name: Optional[str] = None
+    sql: Optional[str] = None
+    description: Optional[str] = None
+    value_format_name: Optional[LookerValueFormatName] = None
     hidden: bool = False
 
 
@@ -152,8 +148,8 @@ class DbtModelColumnMeta(Dbt2LookerMeta):
 class DbtModelColumn(BaseModel):
     name: str
     description: str
-    data_type: Optional[str]
-    constraints: Optional[List[DbtColumnConstraint]]
+    data_type: Optional[str] = None
+    constraints: Optional[List[DbtColumnConstraint]] = None
     meta: DbtModelColumnMeta
 
 
@@ -168,7 +164,7 @@ class Dbt2LookerExploreJoin(BaseModel):
     type: Optional[LookerJoinType] = LookerJoinType.left_outer
     relationship: Optional[LookerJoinRelationship] = LookerJoinRelationship.many_to_one
     sql_on: str
-    view_label: Optional[str]
+    view_label: Optional[str] = None
 
 class Dbt2LookerModelMeta(BaseModel):
     joins: Optional[List[Dbt2LookerExploreJoin]] = []
@@ -189,7 +185,7 @@ class DbtModel(DbtNode):
     meta: DbtModelMeta
     path: Path
 
-    @validator('columns')
+    @field_validator('columns')
     def case_insensitive_column_names(cls, v: Dict[str, DbtModelColumn]):
         return {
             name.lower(): column.copy(update={'name': column.name.lower()})
@@ -200,12 +196,16 @@ class DbtModel(DbtNode):
 class DbtManifestMetadata(BaseModel):
     adapter_type: str
 
-    @validator('adapter_type')
+    @field_validator('adapter_type')
     def adapter_must_be_supported(cls, v):
         try:
             SupportedDbtAdapters(v)
         except ValueError:
-            raise UnsupportedDbtAdapterError(wrong_value=v)
+            raise PydanticCustomError(
+                'unsupported_dbt_adapter',
+                '{wrong_value} is not a supported dbt adapter',
+                dict(wrong_value=v)
+            )
         return v
 
 
@@ -218,13 +218,13 @@ class DbtCatalogNodeMetadata(BaseModel):
     type: str
     db_schema: str = Field(..., alias='schema')
     name: str
-    comment: Optional[str]
-    owner: Optional[str]
+    comment: Optional[str] = None
+    owner: Optional[str] = None
 
 
 class DbtCatalogNodeColumn(BaseModel):
     type: str
-    comment: Optional[str]
+    comment: Optional[str] = None
     index: int
     name: str
 
@@ -233,7 +233,7 @@ class DbtCatalogNode(BaseModel):
     metadata: DbtCatalogNodeMetadata
     columns: Dict[str, DbtCatalogNodeColumn]
 
-    @validator('columns')
+    @field_validator('columns')
     def case_insensitive_column_names(cls, v: Dict[str, DbtCatalogNodeColumn]):
         return {
             name.lower(): column.copy(update={'name': column.name.lower()})
